@@ -1,0 +1,82 @@
+#Packages
+install.packages("MASS")
+install.packages("class")
+install.packages("caTools")
+install.packages("RWeka")
+install.packages("rJava")
+install.packages("caret")
+library("caret")
+install.packages("e1071")
+library("e1071")
+install.packages("ggplot")
+
+#read the file
+wine<-read.csv("winequality-red (1)(2).csv",sep=";")
+
+#baseline model- this shows that the most common quality rank is 5.  If we thus set this as the baseline, the model is accurate 42.5% of the time.
+
+table(wine$quality)
+hist(wine$quality,col="red",labels=TRUE)
+mean(wine$quality)
+baseline<- 681/nrow(wine)
+baseline
+
+
+#linear regression
+basemodel<- lm(quality~1,data = wine)
+fullmodel<- lm(quality~.,data=wine)
+step(basemodel,scope=list(upper=fullmodel,lower~1),direction="forward")
+
+#based on the AIC results, I select the final model proposed(highest AIC even though high AIC is not good) 
+model1<- lm(quality ~ alcohol + volatile.acidity + sulphates + total.sulfur.dioxide + chlorides + pH + free.sulfur.dioxide, data = wine)
+summary(model1)
+
+#run the pred function to check the accuracy of the linear regression model
+set.seed(100)
+library(caTools)
+wine2<-wine
+split = sample.split(wine2$quality, SplitRatio = 0.7)
+train = subset(wine2, split == TRUE)
+test = subset(wine2, split == FALSE)
+prediction <- predict(model1,newdata =test)
+errors <- prediction[,"fit"] - test$quality
+rel_change <- 1 - ((test$quality - abs(errors)) / test$quality)
+pred25 <- table(rel_change<0.25)["TRUE"] / nrow(test)  #this shows that 97% of my values are within 0.25 error points (of one quality increment) from the actual value
+?pred()
+RMSE= sqrt(sum((prediction[,"fit"]-test$quality)^2)/nrow(test))
+RMSE
+prediction
+
+#check accuracy of the model
+prediction2<-round(prediction)
+str(test)
+
+
+confusionMatrix(prediction2,test$quality)
+str(prediction2)
+str(test)
+
+
+#Use of Knn and kfolds cross validation using Weka to check the accuracy of the prediction
+library("RWeka")
+library("rJava")
+library("kknn")
+wine2<-wine
+wine2$quality<-as.factor(wine2$quality)
+#Evaluate various values of K
+for(i in 1:10){
+  classifier <- IBk(quality ~., data = wine2,control = Weka_control(K = i))
+  ewc<-evaluate_Weka_classifier(classifier, numFolds = 10)
+  print("k=")
+  print(i)
+  print(ewc$details["pctCorrect"])
+  }
+?IBk
+#Recall and accuracy for Knn where K=1
+classifier <- IBk(quality ~., data = wine2,control = Weka_control(K = 1))
+ewc<-evaluate_Weka_classifier(classifier, numFolds = 10)
+ewc
+
+#Recall= correctly classified/ incorrectly classed
+recall= 1046/(1046+553)
+recall
